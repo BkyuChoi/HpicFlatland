@@ -22,6 +22,7 @@ class DDDQNPolicy(Policy):
         self.action_size = action_size
         self.double_dqn = True
         self.hidsize = 1
+        
 
         if not evaluation_mode:
             self.hidsize = parameters.hidden_size
