@@ -3,7 +3,16 @@ from flatland.core.env_observation_builder import DummyObservationBuilder
 from my_observation_builder import CustomObservationBuilder
 import numpy as np
 import time
+import single
 
+
+import torch
+from dddqn_policy import DDDQNPolicy
+from model import DuelingQNetwork
+
+device = torch.device('cuda:0') 
+model = torch.load('./checkpoints/multi-3400.pth',map_location=device)
+#from model import  DuelingQNetwork
 
 
 #####################################################################
@@ -18,10 +27,37 @@ remote_client = FlatlandRemoteClient()
 # compute the necessary action for this step for all (or even some)
 # of the agents
 #####################################################################
+import numpy as np
+from flatland.envs.observations import TreeObsForRailEnv
+from observation_utils import normalize_observation
+
+
+# def my_controller(obs, number_of_agents):
+#     _action = {}
+#     # print(model)
+#     for _idx in range(number_of_agents):
+#         _action[_idx] = np.random.randint(0, 5)
+#     return _action
+
 def my_controller(obs, number_of_agents):
     _action = {}
-    for _idx in range(number_of_agents):
-        _action[_idx] = np.random.randint(0, 5)
+    agent_obs = [None] * local_env.get_num_agents()
+
+    for _idx in range(number_of_agents):       
+
+        if obs[_idx]:
+            # TODO pass parameters properly
+            # agent_obs[agent] = normalize_observation(obs[agent], tree_depth=2, observation_radius=10)
+            agent_obs[_idx] = normalize_observation(obs[_idx], tree_depth=2, observation_radius=10)
+        _action[_idx] = 0
+
+        if info['action_required'][_idx]:
+            model.eval()
+            agent_obs[_idx] = torch.from_numpy(agent_obs[_idx]).float().unsqueeze(0).to(device)
+            with torch.no_grad():
+                action_values = model(agent_obs[_idx])
+            _action[_idx]= np.argmax(action_values.cpu().data.numpy())
+
     return _action
 
 #####################################################################
@@ -31,7 +67,10 @@ def my_controller(obs, number_of_agents):
 # the example here : 
 # https://gitlab.aicrowd.com/flatland/flatland/blob/master/flatland/envs/observations.py#L14
 #####################################################################
-my_observation_builder = CustomObservationBuilder()
+
+# my_observation_builder = CustomObservationBuilder()
+# my_observation_builder = DummyObservationBuilder()
+my_observation_builder = TreeObsForRailEnv(max_depth=2)
 
 # Or if you want to use your own approach to build the observation from the env_step, 
 # please feel free to pass a DummyObservationBuilder() object as mentioned below,
@@ -60,9 +99,11 @@ while True:
     # to allow you to have as much control as you wish 
     # over the observation of your choice.
     time_start = time.time()
+  
     observation, info = remote_client.env_create(
-                    obs_builder_object=my_observation_builder
-                )
+                      obs_builder_object=my_observation_builder,
+                  )
+    #print(observation)
     env_creation_time = time.time() - time_start
     if not observation:
         #
@@ -91,6 +132,13 @@ while True:
     # you need from the environment. It is a valid RailEnv instance.
     local_env = remote_client.env
     number_of_agents = len(local_env.agents)
+
+    ############
+    height = local_env.height
+    width = local_env.width
+    print("Height: ", height, " width: ", width, " nagents: ",number_of_agents)
+    
+    ############
 
     # Now we enter into another infinite loop where we 
     # compute the actions for all the individual steps in this episode
