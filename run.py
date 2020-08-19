@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import time
+import single
 
 import torch
 from flatland.core.env_observation_builder import DummyObservationBuilder
@@ -71,6 +72,7 @@ while True:
     # This way we decide if we want to calculate the observations or not instead
     # of having them calculated every time we perform an env step.
     time_start = time.time()
+  
     observation, info = remote_client.env_create(
         obs_builder_object=DummyObservationBuilder()
     )

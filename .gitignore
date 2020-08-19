@@ -130,3 +130,8 @@ scratch/
 !checkpoints/.gitkeep
 replay_buffers/*
 !replay_buffers/.gitkeep
+checkpoints/
+runs/
+__pycache__/
+.vscode/
+*.rdb
