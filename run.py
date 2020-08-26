@@ -9,10 +9,19 @@ import single
 import torch
 from dddqn_policy import DDDQNPolicy
 from model import DuelingQNetwork
-
+#from flatland.envs.rail_env_utils import load_flatland_environment_from_file
 device = torch.device('cuda:0') 
-model = torch.load('./checkpoints/multi-3400.pth',map_location=device)
-#from model import  DuelingQNetwork
+model = torch.load('./checkpoints/test_multi-6300.pth',map_location=device)
+# env = load_flatland_environment_from_file("scratch/test-envs/Test_2/Level_1.pkl")
+# n_features_per_node = env.obs_builder.observation_dim
+# n_nodes = 0
+# for i in range(2 + 1):
+#     n_nodes += np.power(4, i)
+# state_size = n_features_per_node * n_nodes
+# action_size = 5
+# checkpoint = torch.load('./checkpoints/test_multi-6300.pth',map_location=device)
+# model = DuelingQNetwork(state_size,action_size)
+# model.load_state_dict(checkpoint['model_state_dict'])
 
 
 #####################################################################

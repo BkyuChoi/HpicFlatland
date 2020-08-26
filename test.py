@@ -26,6 +26,8 @@ from observation_utils import normalize_observation
 from timer import Timer
 from dddqn_policy import DDDQNPolicy
 
+from flatland.envs.rail_env_utils import load_flatland_environment_from_file
+
 try:
     import wandb
 
@@ -48,21 +50,28 @@ if SUPPRESS_OUTPUT:
     def print(*args, **kwargs):
         pass
 
+def train_agent(train_params):
 
-def train_agent(env_params, train_params):
+    env = load_flatland_environment_from_file("scratch/test-envs/Test_0/Level_1.pkl")
+    env.reset(regenerate_schedule=True, regenerate_rail=True )
     # Environment parameters
-    n_agents = env_params.n_agents
-    x_dim = env_params.x_dim
-    y_dim = env_params.y_dim
-    n_cities = env_params.n_cities
-    max_rails_between_cities = env_params.max_rails_between_cities
-    max_rails_in_city = env_params.max_rails_in_city
-    seed = env_params.seed
+    n_agents = len(env.agents)
+    print("n_agents= ", n_agents)
+    print("env.get_num_agents(): ",env.get_num_agents())
+    x_dim = env.width
+    y_dim = env.height
+    n_cities = 3
+    #max_rails_between_cities = env_params.max_rails_between_cities
+    #max_rails_in_city = env_params.max_rails_in_city
+    seed = 2125
 
     # Observation parameters
-    observation_tree_depth = env_params.observation_tree_depth
-    observation_radius = env_params.observation_radius
-    observation_max_path_depth = env_params.observation_max_path_depth
+    # observation_tree_depth = env_params.observation_tree_depth
+    # observation_radius = env_params.observation_radius
+    # observation_max_path_depth = env_params.observation_max_path_depth
+    observation_tree_depth = 2
+    observation_radius = 10
+    observation_max_path_depth = 30
 
     # Training parameters
     eps_start = train_params.eps_start
@@ -96,24 +105,24 @@ def train_agent(env_params, train_params):
     }
 
     # Setup the environment
-    env = RailEnv(
-        width=x_dim,
-        height=y_dim,
-        rail_generator=sparse_rail_generator(
-            max_num_cities=n_cities,
-            grid_mode=False,
-            max_rails_between_cities=max_rails_between_cities,
-            max_rails_in_city=max_rails_in_city
-        ),
-        schedule_generator=sparse_schedule_generator(speed_profiles),
-        number_of_agents=n_agents,
-        malfunction_generator_and_process_data=malfunction_from_params(malfunction_parameters),
-        obs_builder_object=tree_observation,
-        random_seed=seed
-    )
+    # env = RailEnv(
+    #     width=x_dim,
+    #     height=y_dim,
+    #     rail_generator=sparse_rail_generator(
+    #         max_num_cities=n_cities,
+    #         grid_mode=False,
+    #         max_rails_between_cities=max_rails_between_cities,
+    #         max_rails_in_city=max_rails_in_city
+    #     ),
+    #     schedule_generator=sparse_schedule_generator(speed_profiles),
+    #     number_of_agents=n_agents,
+    #     malfunction_generator_and_process_data=malfunction_from_params(malfunction_parameters),
+    #     obs_builder_object=tree_observation,
+    #     random_seed=seed
+    # 
 
-    env.reset(regenerate_schedule=True, regenerate_rail=True)
-
+    # env.reset(regenerate_schedule=True, regenerate_rail=True)
+       
     # Setup renderer
     if train_params.render:
         env_renderer = RenderTool(env, gl="PGL")
@@ -132,6 +141,9 @@ def train_agent(env_params, train_params):
     # This is the official formula used during evaluations
     # See details in flatland.envs.schedule_generators.sparse_schedule_generator
     max_steps = int(4 * 2 * (env.height + env.width + (n_agents / n_cities)))
+    #max_steps = env._max_episode_steps
+    print("max_steps = ",  max_steps)
+    print("env._max_episode_steps= ",env._max_episode_steps)
 
     action_count = [0] * action_size
     action_dict = dict()
@@ -141,7 +153,7 @@ def train_agent(env_params, train_params):
     update_values = False
     smoothed_normalized_score = -1.0
     smoothed_eval_normalized_score = -1.0
-    smoothed_completion = 0.0
+    #smoothed_completion = 0.0
     smoothed_eval_completion = 0.0
 
     # Double Dueling DQN policy
@@ -150,7 +162,7 @@ def train_agent(env_params, train_params):
     # TensorBoard writer
     writer = SummaryWriter()
     writer.add_hparams(vars(train_params), {})
-    writer.add_hparams(vars(env_params), {})
+    #writer.add_hparams(vars(env_params), {})
 
     training_timer = Timer()
     training_timer.start()
@@ -158,7 +170,18 @@ def train_agent(env_params, train_params):
     print("\n🚉 Training {} trains on {}x{} grid for {} episodes, evaluating on {} episodes every {} episodes.\n"
           .format(env.get_num_agents(), x_dim, y_dim, n_episodes, n_eval_episodes, checkpoint_interval))
 
-    for episode_idx in range(n_episodes + 1):
+    model = policy.qnetwork_local
+    optimizer = policy.optimizer
+
+    checkpoint = torch.load('./checkpoints/test_multi-700.pth')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    checkepisode_idx = checkpoint['episode_idx']
+    eps_start = checkpoint['eps_start']
+    smoothed_completion = checkpoint['Avg']
+    print(checkepisode_idx)
+    #for episode_idx in range(n_episodes+1):
+    for episode_idx in range(checkepisode_idx,(n_episodes + 1)):
         # Timers
         step_timer = Timer()
         reset_timer = Timer()
@@ -251,7 +274,16 @@ def train_agent(env_params, train_params):
 
         # Print logs
         if episode_idx % checkpoint_interval == 0:
-            torch.save(policy.qnetwork_local, './checkpoints/origin_multi-' + str(episode_idx) + '.pth')
+            #save_checkpoint(episode_idx, policy.qnetwork_local, policy.qnetwork_local.optimizer, './checkpoints/test'+str(episode_idx)+'.pth')
+            #torch.save(policy.qnetwork_local, './checkpoints/obs2_multi-' + str(episode_idx) + '.pth')
+            torch.save(
+                {'episode_idx':episode_idx,
+                'model_state_dict':policy.qnetwork_local.state_dict(),
+                'optimizer_state_dict':policy.optimizer.state_dict(),
+                'eps_start':eps_start,
+                'Avg':smoothed_completion
+                #'loss': policy.qnetwork_local.loss
+            }, './checkpoints/test_multi-' + str(episode_idx) + '.pth')
             if train_params.render:
                 env_renderer.close_window()
 
@@ -404,23 +436,38 @@ if __name__ == "__main__":
     print("\nTraining parameters:")
     pprint(vars(training_parameters))
 
-    environment_parameters = {
-        # small_v0 config
-        "n_agents": 5,
-        "x_dim": 35,
-        "y_dim": 35,
-        "n_cities": 4,
-        "max_rails_between_cities": 2,
-        "max_rails_in_city": 3,
+    # environment_parameters = {
+    #     # small_v0 config
+    #     "n_agents": 5,
+    #     "x_dim": 35,
+    #     "y_dim": 35,
+    #     "n_cities": 4,
+    #     "max_rails_between_cities": 2,
+    #     "max_rails_in_city": 3,
 
-        "seed": 42,
-        "observation_tree_depth": 2,
-        "observation_radius": 10,
-        "observation_max_path_depth": 30
-    }
+    #     "seed": 42,
+    #     "observation_tree_depth": 2,
+    #     "observation_radius": 10,
+    #     "observation_max_path_depth": 30
+    # }
 
-    print("\nEnvironment parameters:")
-    pprint(environment_parameters)
+    # print("\nEnvironment parameters:")
+    # pprint(environment_parameters)
+
+    # environment_parameters = {
+    #     # small_v0 config
+    #     "n_agents": len(env.agents),
+    #     "x_dim": env.width,
+    #     "y_dim": env.height,
+    #     "n_cities": env.n_cities,
+    #     "max_rails_between_cities": env.max_rails_between_cities,
+    #     "max_rails_in_city": env.max_rails_in_city,
+
+    #     "seed": 42,
+    #     "observation_tree_depth": 2,
+    #     "observation_radius": 10,
+    #     "observation_max_path_depth": 30
+    # }
 
     os.environ["OMP_NUM_THREADS"] = str(training_parameters.num_threads)
-    train_agent(Namespace(**environment_parameters), training_parameters)
+    train_agent( training_parameters)
